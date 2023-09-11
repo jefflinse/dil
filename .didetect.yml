@@ -1,0 +1,4 @@
+allowed_std_libs:
+  - fmt
+  - log
+  - strings
