@@ -30,10 +30,10 @@ func runLinter(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 
-	allowedStdLibs := viper.GetStringSlice("allowed_std_libs")
-	allowedLibsMap := make(map[string]struct{}, len(allowedStdLibs))
-	for _, lib := range allowedStdLibs {
-		allowedLibsMap[lib] = struct{}{}
+	allowedPackages := viper.GetStringSlice("allow_packages")
+	allowedPkgsMap := make(map[string]struct{}, len(allowedPackages))
+	for _, pkg := range allowedPackages {
+		allowedPkgsMap[pkg] = struct{}{}
 	}
 
 	ignoredFunctions := viper.GetStringSlice("ignore_functions")
@@ -45,7 +45,7 @@ func runLinter(cmd *cobra.Command, args []string) {
 	var allIssues []Issue
 	for _, pkg := range pkgs {
 		for fileName, file := range pkg.Files {
-			issues := inspectFile(file, allowedLibsMap, fileName, pkg, fs, ignoredFuncsMap)
+			issues := inspectFile(file, allowedPkgsMap, fileName, pkg, fs, ignoredFuncsMap)
 			allIssues = append(allIssues, issues...)
 		}
 	}
@@ -58,6 +58,21 @@ func runLinter(cmd *cobra.Command, args []string) {
 func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, pkg *ast.Package, fs *token.FileSet, ignoredFuncs map[string]struct{}) []Issue {
 	var issues []Issue
 
+	importMap := make(map[string]string)
+	for _, imp := range file.Imports {
+		fullPath := strings.Trim(imp.Path.Value, `"`) // Remove quotes around path
+		// Get short name
+		var shortName string
+		if imp.Name != nil {
+			shortName = imp.Name.Name
+		} else {
+			// Extract the last element from path if specific name isn't given
+			splitPath := strings.Split(fullPath, "/")
+			shortName = splitPath[len(splitPath)-1]
+		}
+		importMap[shortName] = fullPath
+	}
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		if funDecl, ok := n.(*ast.FuncDecl); ok {
 			// If the function is in the ignore list, skip its inspection
@@ -68,8 +83,13 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, isSelExpr := call.Fun.(*ast.SelectorExpr); isSelExpr {
 				if x, isIdent := sel.X.(*ast.Ident); isIdent {
-					// Ignore trivial packages from the standard library
-					if _, isTrivial := allowed[x.Name]; isTrivial {
+					// Get the full package path from importMap
+					pkgPath, exists := importMap[x.Name]
+					if !exists {
+						pkgPath = x.Name // Fallback to the short name if not found in importMap
+					}
+
+					if _, isAllowed := allowed[pkgPath]; isAllowed {
 						return true
 					}
 
