@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,14 +25,19 @@ func main() {
 func setupConfig() {
 	viper.SetConfigName(".didetect")
 	viper.SetConfigType("yml")
+
+	// First, look in the current directory for the config file.
 	viper.AddConfigPath(".")
 
-	// Try to read the configuration
+	// If not found in the current directory, then look in the user's home directory.
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found, using default values
-			log.Println("Config file not found; using default values")
-		} else {
+		homeDir, errHome := os.UserHomeDir()
+		if errHome != nil {
+			log.Fatalf("Failed to get home directory, %s", errHome)
+		}
+		viper.AddConfigPath(homeDir)
+
+		if err = viper.ReadInConfig(); err != nil {
 			log.Fatalf("Error reading config file, %s", err)
 		}
 	}

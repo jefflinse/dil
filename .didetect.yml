@@ -1,10 +1,30 @@
 allow_packages:
+  - bytes
+  - context
+  - crypto/rand
+  - encoding/hex
+  - encoding/json
+  - errors
   - fmt
+  - io
+  - ioutil
   - log
+  - math/rand
+  - net
+  - net/http
+  - net/url
+  - os
+  - path
+  - path/filepath
+  - reflect
+  - regexp
+  - strconv
   - strings
+  - sync
+  - testing
+  - time
   - github.com/spf13/viper
 
 ignore_functions:
   - main
-  - setupConfig
   - Test*
