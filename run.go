@@ -73,7 +73,27 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 		importMap[shortName] = fullPath
 	}
 
+	localVars := make([]string, 0)
+
 	ast.Inspect(file, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhsExpr := range stmt.Lhs {
+				if ident, isIdent := lhsExpr.(*ast.Ident); isIdent {
+					localVars = append(localVars, ident.Name)
+				}
+			}
+		case *ast.DeclStmt:
+			if genDecl, isGenDecl := stmt.Decl.(*ast.GenDecl); isGenDecl && genDecl.Tok == token.VAR {
+				for _, spec := range genDecl.Specs {
+					valueSpec := spec.(*ast.ValueSpec)
+					for _, ident := range valueSpec.Names {
+						localVars = append(localVars, ident.Name)
+					}
+				}
+			}
+		}
+
 		if funDecl, ok := n.(*ast.FuncDecl); ok {
 			// If the function is in the ignore list, skip its inspection
 			if _, isIgnored := ignoredFuncs[funDecl.Name.Name]; isIgnored {
@@ -83,6 +103,10 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, isSelExpr := call.Fun.(*ast.SelectorExpr); isSelExpr {
 				if x, isIdent := sel.X.(*ast.Ident); isIdent {
+					if isLocalVar, _ := inSlice(x.Name, localVars); isLocalVar {
+						return true
+					}
+
 					// Get the full package path from importMap
 					pkgPath, exists := importMap[x.Name]
 					if !exists {
@@ -108,4 +132,13 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 	})
 
 	return issues
+}
+
+func inSlice(item string, slice []string) (bool, int) {
+	for i, v := range slice {
+		if v == item {
+			return true, i
+		}
+	}
+	return false, -1
 }
