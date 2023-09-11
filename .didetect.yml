@@ -2,3 +2,8 @@ allowed_std_libs:
   - fmt
   - log
   - strings
+
+ignore_functions:
+  - main
+  - setupConfig
+  - Test*
