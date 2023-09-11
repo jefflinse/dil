@@ -36,17 +36,33 @@ func runLinter(cmd *cobra.Command, args []string) {
 	for _, pkg := range pkgs {
 		for fileName, file := range pkg.Files {
 			ast.Inspect(file, func(n ast.Node) bool {
-				switch x := n.(type) {
-				case *ast.CallExpr:
-					// Checking if this call is a creation of an external object
-					if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
-						if ident, ok := sel.X.(*ast.Ident); ok {
-							if ident.Obj == nil && !isBuiltin(ident.Name) {
-								fmt.Printf("File: %s, Line: %d, External object %s created\n",
-									fileName, fs.Position(x.Pos()).Line, ident.Name)
-							}
+				switch fn := n.(type) {
+				case *ast.FuncDecl:
+					paramSet := make(map[string]bool)
+					for _, p := range fn.Type.Params.List {
+						for _, n := range p.Names {
+							paramSet[n.Name] = true
 						}
 					}
+					ast.Inspect(fn.Body, func(nn ast.Node) bool {
+						if call, ok := nn.(*ast.CallExpr); ok {
+							if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+								if ident, ok := sel.X.(*ast.Ident); ok {
+									if ident.Obj == nil && !isBuiltin(ident.Name) {
+										for _, arg := range call.Args {
+											if id, ok := arg.(*ast.Ident); ok {
+												if paramSet[id.Name] {
+													fmt.Printf("File: %s, Line: %d, External object %s created with argument from function\n",
+														fileName, fs.Position(call.Pos()).Line, ident.Name)
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						return true
+					})
 				}
 				return true
 			})
