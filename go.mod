@@ -1,4 +1,4 @@
-module github.com/jefflinse/di-detector
+module github.com/jefflinse/dil
 
 go 1.21.1
 
