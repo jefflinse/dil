@@ -12,6 +12,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Issue struct {
+	PackageName string
+	FileName    string
+	Line        int
+}
+
+func (i *Issue) String() string {
+	return fmt.Sprintf("External package %s used in file: %s, line: %d", i.PackageName, i.FileName, i.Line)
+}
+
 func runLinter(cmd *cobra.Command, args []string) {
 	path := args[0]
 	fs := token.NewFileSet()
@@ -26,14 +36,22 @@ func runLinter(cmd *cobra.Command, args []string) {
 		allowedLibsMap[lib] = struct{}{}
 	}
 
+	var allIssues []Issue
 	for _, pkg := range pkgs {
 		for fileName, file := range pkg.Files {
-			inspectFile(file, allowedLibsMap, fileName, pkg, fs)
+			issues := inspectFile(file, allowedLibsMap, fileName, pkg, fs)
+			allIssues = append(allIssues, issues...)
 		}
+	}
+
+	for _, issue := range allIssues {
+		fmt.Println(issue.String())
 	}
 }
 
-func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, pkg *ast.Package, fs *token.FileSet) {
+func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, pkg *ast.Package, fs *token.FileSet) []Issue {
+	var issues []Issue
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok {
 			if sel, isSelExpr := call.Fun.(*ast.SelectorExpr); isSelExpr {
@@ -45,11 +63,17 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 
 					// Checking if the package being used is not the current package
 					if !strings.EqualFold(x.Name, pkg.Name) {
-						fmt.Printf("External package %s used in file: %s, line: %d\n", x.Name, fileName, fs.Position(call.Pos()).Line)
+						issues = append(issues, Issue{
+							PackageName: x.Name,
+							FileName:    fileName,
+							Line:        fs.Position(call.Pos()).Line,
+						})
 					}
 				}
 			}
 		}
 		return true
 	})
+
+	return issues
 }
