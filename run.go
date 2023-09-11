@@ -28,24 +28,28 @@ func runLinter(cmd *cobra.Command, args []string) {
 
 	for _, pkg := range pkgs {
 		for fileName, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				if call, ok := n.(*ast.CallExpr); ok {
-					if sel, isSelExpr := call.Fun.(*ast.SelectorExpr); isSelExpr {
-						if x, isIdent := sel.X.(*ast.Ident); isIdent {
-							// Ignore trivial packages from the standard library
-							if _, isTrivial := allowedLibsMap[x.Name]; isTrivial {
-								return true
-							}
-
-							// Checking if the package being used is not the current package
-							if !strings.EqualFold(x.Name, pkg.Name) {
-								fmt.Printf("External package %s used in file: %s, line: %d\n", x.Name, fileName, fs.Position(call.Pos()).Line)
-							}
-						}
-					}
-				}
-				return true
-			})
+			inspectFile(file, allowedLibsMap, fileName, pkg, fs)
 		}
 	}
+}
+
+func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, pkg *ast.Package, fs *token.FileSet) {
+	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if sel, isSelExpr := call.Fun.(*ast.SelectorExpr); isSelExpr {
+				if x, isIdent := sel.X.(*ast.Ident); isIdent {
+					// Ignore trivial packages from the standard library
+					if _, isTrivial := allowed[x.Name]; isTrivial {
+						return true
+					}
+
+					// Checking if the package being used is not the current package
+					if !strings.EqualFold(x.Name, pkg.Name) {
+						fmt.Printf("External package %s used in file: %s, line: %d\n", x.Name, fileName, fs.Position(call.Pos()).Line)
+					}
+				}
+			}
+		}
+		return true
+	})
 }
