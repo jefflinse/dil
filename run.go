@@ -12,22 +12,31 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Issue represents a single issue found by the linter.
 type Issue struct {
-	PackageName string
-	FileName    string
-	Line        int
+	Package string `json:"package"`
+	File    string `json:"file"`
+	Line    int    `json:"line"`
 }
 
+// String returns a string representation of the issue.
 func (i *Issue) String() string {
-	return fmt.Sprintf("External package %s used in file: %s, line: %d", i.PackageName, i.FileName, i.Line)
+	return fmt.Sprintf("external package %s used at %s:%d", i.Package, i.File, i.Line)
 }
 
+// Runs the linter.
 func runLinter(cmd *cobra.Command, args []string) {
+	// arg[0] is the package path
 	path := args[0]
 	fs := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fs, path, nil, parser.AllErrors)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	log.Printf("inspecting %d packages:", len(pkgs))
+	for pkgName := range pkgs {
+		log.Printf("  %s\n", pkgName)
 	}
 
 	allowedPackages := viper.GetStringSlice("allow_packages")
@@ -36,16 +45,23 @@ func runLinter(cmd *cobra.Command, args []string) {
 		allowedPkgsMap[pkg] = struct{}{}
 	}
 
+	log.Printf("allowed packages: %v\n", allowedPackages)
+
 	ignoredFunctions := viper.GetStringSlice("ignore_functions")
 	ignoredFuncsMap := make(map[string]struct{}, len(ignoredFunctions))
 	for _, funcName := range ignoredFunctions {
 		ignoredFuncsMap[funcName] = struct{}{}
 	}
 
+	log.Printf("ignored functions: %v\n", ignoredFunctions)
+
 	var allIssues []Issue
 	for _, pkg := range pkgs {
 		for fileName, file := range pkg.Files {
+			log.Printf("inspecting %s\n", fileName)
 			issues := inspectFile(file, allowedPkgsMap, fileName, pkg, fs, ignoredFuncsMap)
+
+			log.Printf("  found %d issues\n", len(issues))
 			allIssues = append(allIssues, issues...)
 		}
 	}
@@ -120,9 +136,9 @@ func inspectFile(file *ast.File, allowed map[string]struct{}, fileName string, p
 					// Checking if the package being used is not the current package
 					if !strings.EqualFold(x.Name, pkg.Name) {
 						issues = append(issues, Issue{
-							PackageName: x.Name,
-							FileName:    fileName,
-							Line:        fs.Position(call.Pos()).Line,
+							Package: x.Name,
+							File:    fileName,
+							Line:    fs.Position(call.Pos()).Line,
 						})
 					}
 				}
