@@ -323,6 +323,8 @@ func handleAssignStmt(result *FileResult, stmt *ast.AssignStmt, fs *token.FileSe
 				log.Printf("          SELECTOR: %+v\n", elt)
 				log.Printf("            EXPRESSION: %+v\n", elt.X)
 				log.Printf("            FIELD SELCTOR: %+v\n", elt.Sel)
+				// the expression here is a candidate for an external package reference
+				log.Printf("--- EXTERNAL PKG ---> %+v\n", elt.X)
 			default:
 				log.Printf("          unexpected composite literal type: %T\n", elt)
 			}
